@@ -92,9 +92,9 @@ void print_buffer_as_hex(uint8_t* address, int length) {
   return;
 #endif
   for (int i = 0; i < length; i++) {
-    printf(" %X", *(address + i));
+    printf("%02X", *(address + i));
     if (i % 64 == 0 && i != 0) {
-      printf("\n");
+      /* printf("\n"); */
     }
   }
 }
@@ -170,30 +170,27 @@ bool receiveSync(int ack_timeout_ms) {
 
 /* receiveData() //{ */
 
-bool receiveData(int ack_timeout_ms) {
+uint16_t receiveData(int ack_timeout_ms) {
 
-  bool ret_val = false;
+  uint16_t ret_val = 0;
 
   uint8_t receive_buf[6];
   int     len = uart_read_bytes(UART_NUM_1, receive_buf, 6, ack_timeout_ms / portTICK_RATE_MS);
 
   if (receive_buf[0] == COMMAND_START && receive_buf[1] == DATA_ID && len == 6) {
     ret_val = true;
-  }
 
-  uint32_t data_size = 0;
+    ret_val = (receive_buf[5] << 16) + (receive_buf[4] << 8) + receive_buf[3];
 
-  data_size = (receive_buf[3] << 16) + (receive_buf[4] << 8) + receive_buf[5];
-
-  printf("DATA_SIZE: %i  %X %X %X\n", data_size, receive_buf[3], receive_buf[4], receive_buf[5]);
+    printf("DATA_SIZE: %i  %X %X %X\n", ret_val, receive_buf[3], receive_buf[4], receive_buf[5]);
 #ifdef DEBUG_OUTPUT
-  printf("REC %i: \n", len);
-  print_buffer_as_hex(receive_buf, len);
-  printf("DATA: ");
-  printf(ret_val ? "true" : "false");
-  printf("\n---------------------------------\n");
+    printf("REC %i: \n", len);
+    print_buffer_as_hex(receive_buf, len);
+    printf("DATA: ");
+    printf(ret_val ? "true" : "false");
+    printf("\n---------------------------------\n");
 #endif
-
+  }
   return ret_val;
 }
 
@@ -212,9 +209,9 @@ void sendPacketAck(uint8_t id_byte_0, uint8_t id_byte_1) {
   command[5] = id_byte_0;
 
 #ifdef DEBUG_OUTPUT
-  printf("SENT: ");
-  print_buffer_as_hex(command, 6);
-  printf("\n---------------------------------\n");
+  /* printf("  SENT: "); */
+  /* print_buffer_as_hex(command, 6); */
+  /* printf("\n---------------------------------\n"); */
 #endif
 
   uart_write_bytes(UART_NUM_1, (const char*)command, 6);
@@ -224,24 +221,27 @@ void sendPacketAck(uint8_t id_byte_0, uint8_t id_byte_1) {
 
 /* receiveImagePacket() //{ */
 
-bool receiveImagePacket(int ack_timeout_ms) {
+uint16_t receiveImagePacket(int ack_timeout_ms, uint8_t* img_buffer, uint16_t offset) {
 
-  bool ret_val = false;
+  uint16_t image_data_size = 0;
 
   uint8_t receive_buf[512];
   int     len = uart_read_bytes(UART_NUM_1, receive_buf, 512, ack_timeout_ms / portTICK_RATE_MS);
 
-  if (len == 512) {
-    printf("got 512 bytes, ID: ");
-    print_buffer_as_hex(receive_buf, len);
+  if (len > 4) {
+    image_data_size = (receive_buf[3] << 8) + receive_buf[2];
+    /* printf("got %i bytes, data size: %i ID: ", len, image_data_size); */
+    /* print_buffer_as_hex(receive_buf, len); */
+    for (int i = 4; i < len - 2; i++) {
+      img_buffer[i + offset] = receive_buf[i];
+    }
     sendPacketAck(receive_buf[1], receive_buf[0]);
-    ret_val = true;
   } else if (len != 0) {
-    printf("got %i bytes, ID: \n", len);
-    print_buffer_as_hex(receive_buf, len);
+    /* printf("got %i bytes, ID: \n", len); */
+    /* print_buffer_as_hex(receive_buf, len); */
   }
 
-  return ret_val;
+  return image_data_size;
 }
 
 //}
@@ -379,18 +379,18 @@ void app_main(void) {
     }
   }
 
-  printf("sending RESET\n");
-  sendCommand(RESET_ID, 0x00, 0x00, 0x00, 0x00, 100);
-  vTaskDelay(1000 / portTICK_PERIOD_MS);
+  /* printf("sending RESET\n"); */
+  /* sendCommand(RESET_ID, 0x00, 0x00, 0x00, 0x00, 100); */
+  /* vTaskDelay(1000 / portTICK_PERIOD_MS); */
 
-  if (syncCamera()) {
-    printf("camera synced\n");
-  } else {
-    while (1) {
-      printf("camera failed to sync\n");
-      vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
-  }
+  /* if (syncCamera()) { */
+  /*   printf("camera synced\n"); */
+  /* } else { */
+  /*   while (1) { */
+  /*     printf("camera failed to sync\n"); */
+  /*     vTaskDelay(1000 / portTICK_PERIOD_MS); */
+  /*   } */
+  /* } */
 
   printf("sending init\n");
   sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_640X480, 100);
@@ -402,24 +402,30 @@ void app_main(void) {
 
   printf("sending snapshot mode\n");
   sendCommand(SNAPSHOT_ID, SNAPSHOT_P1_JPEG, 0x00, 0x00, 0x00, 100);
-  vTaskDelay(100 / portTICK_PERIOD_MS);
+  vTaskDelay(1000 / portTICK_PERIOD_MS);
 
   printf("sending get picture\n");
   sendCommand(GET_PICTURE_ID, GET_PICTURE_P1_SNAPSHOT_MODE, 0x00, 0x00, 0x00, 100);
   vTaskDelay(100 / portTICK_PERIOD_MS);
 
-  /* if (receiveData(100)) { */
-  receiveData(500);
+  uint16_t data_to_be_rec = receiveData(100);
   printf("got DATA, sending ACK\n");
   sendAck(DATA_ID);
-  /* } */
 
+  uint32_t got_total_bytes = 0;
+  uint8_t* image_buffer    = (uint8_t*)malloc(40000 * sizeof(uint8_t));
 
   while (1) {
-    if (receiveImagePacket(100)) {
-      printf("receiving image packet\n");
+    uint16_t got_bytes = receiveImagePacket(100, image_buffer, got_total_bytes);
+    if (got_bytes > 0) {
+      got_total_bytes += got_bytes;
+      if (data_to_be_rec == got_total_bytes) {
+        print_buffer_as_hex(image_buffer, got_total_bytes);
+          /* printf("Got all the stuff\n"); */
+        }
+      }
     }
   }
-}
 
-//}
+  //}
+
