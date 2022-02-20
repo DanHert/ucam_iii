@@ -19,7 +19,7 @@
 
 #define ECHO_TEST_TXD (17)
 #define ECHO_TEST_RXD (16)
-#define BUF_SIZE (38400)
+#define BUF_SIZE (4096)
 
 #ifdef CONFIG_IDF_TARGET_ESP32
 #define CHIP_NAME "ESP32"
@@ -53,10 +53,12 @@
 
 #define SNAPSHOT_ID 0x05
 #define SNAPSHOT_P1_JPEG 0x00
-#define SNAPSHOT_P2_RAW 0x00
+#define SNAPSHOT_P2_RAW 0x01
 
 #define SET_PKG_SIZE_ID 0x06
 #define SET_PKG_SIZE_P1 0x08
+
+#define RESET_ID 0x08
 
 #define DATA_ID 0x0A
 #define DATA_P1_SNAPSHOT 0x01
@@ -73,11 +75,12 @@ void print_buffer_as_hex_compact(uint8_t* address, int length) {
 #ifndef DEBUG_OUTPUT
   return;
 #endif
-  printf("message as hexa: ");
   for (int i = 0; i < length; i++) {
     printf("%x", *(address + i));
+    if (i % 64 == 0 && i != 0) {
+      printf("\n");
+    }
   }
-  printf("\n");
 }
 
 //}
@@ -88,11 +91,12 @@ void print_buffer_as_hex(uint8_t* address, int length) {
 #ifndef DEBUG_OUTPUT
   return;
 #endif
-  printf("message as hexa: ");
   for (int i = 0; i < length; i++) {
-    printf("%X ", *(address + i));
+    printf(" %X", *(address + i));
+    if (i % 64 == 0 && i != 0) {
+      printf("\n");
+    }
   }
-  printf("\n");
 }
 
 //}
@@ -126,9 +130,9 @@ bool receiveAck(uint8_t command_id, int ack_timeout_ms) {
   }
 
 #ifdef DEBUG_OUTPUT
-  printf("received %i: \n", len);
+  printf("REC %i: ", len);
   print_buffer_as_hex(receive_buf, len);
-  printf("ACK: ");
+  printf("   ACK: ");
   printf(ret_val ? "true" : "false");
   printf("\n---------------------------------\n");
 #endif
@@ -152,7 +156,7 @@ bool receiveSync(int ack_timeout_ms) {
   }
 
 #ifdef DEBUG_OUTPUT
-  printf("received %i: \n", len);
+  printf("REC %i: \n", len);
   print_buffer_as_hex(receive_buf, len);
   printf("SYNC: ");
   printf(ret_val ? "true" : "false");
@@ -177,8 +181,13 @@ bool receiveData(int ack_timeout_ms) {
     ret_val = true;
   }
 
+  uint32_t data_size = 0;
+
+  data_size = (receive_buf[3] << 16) + (receive_buf[4] << 8) + receive_buf[5];
+
+  printf("DATA_SIZE: %i  %X %X %X\n", data_size, receive_buf[3], receive_buf[4], receive_buf[5]);
 #ifdef DEBUG_OUTPUT
-  printf("received %i: \n", len);
+  printf("REC %i: \n", len);
   print_buffer_as_hex(receive_buf, len);
   printf("DATA: ");
   printf(ret_val ? "true" : "false");
@@ -203,10 +212,9 @@ void sendPacketAck(uint8_t id_byte_0, uint8_t id_byte_1) {
   command[5] = id_byte_0;
 
 #ifdef DEBUG_OUTPUT
-  printf("---------------------------------\n");
-  printf("command sent: \n");
+  printf("SENT: ");
   print_buffer_as_hex(command, 6);
-  printf("-----\n");
+  printf("\n---------------------------------\n");
 #endif
 
   uart_write_bytes(UART_NUM_1, (const char*)command, 6);
@@ -224,12 +232,13 @@ bool receiveImagePacket(int ack_timeout_ms) {
   int     len = uart_read_bytes(UART_NUM_1, receive_buf, 512, ack_timeout_ms / portTICK_RATE_MS);
 
   if (len == 512) {
-    printf("got 512 bytes, ID: \n");
-    print_buffer_as_hex(receive_buf, 2);
-    sendPacketAck(receive_buf[0], receive_buf[1]);
+    printf("got 512 bytes, ID: ");
+    print_buffer_as_hex(receive_buf, len);
+    sendPacketAck(receive_buf[1], receive_buf[0]);
     ret_val = true;
-  }else{
+  } else if (len != 0) {
     printf("got %i bytes, ID: \n", len);
+    print_buffer_as_hex(receive_buf, len);
   }
 
   return ret_val;
@@ -251,9 +260,9 @@ bool sendCommand(uint8_t command_id, uint8_t param1, uint8_t param2, uint8_t par
 
 #ifdef DEBUG_OUTPUT
   printf("---------------------------------\n");
-  printf("command sent: \n");
+  printf("SENT: ");
   print_buffer_as_hex(command, 6);
-  printf("-----\n");
+  printf("\n");
 #endif
 
   uart_write_bytes(UART_NUM_1, (const char*)command, 6);
@@ -277,9 +286,9 @@ void sendAck(uint8_t command_id) {
 
 #ifdef DEBUG_OUTPUT
   printf("---------------------------------\n");
-  printf("command sent: \n");
+  printf("SENT: ");
   print_buffer_as_hex(command, 6);
-  printf("-----\n");
+  printf("\n---------------------------------\n");
 #endif
 
   uart_write_bytes(UART_NUM_1, (const char*)command, 6);
@@ -323,7 +332,9 @@ bool syncCamera() {
 
   printf("Succesfully synced\n");
   sendAck(SYNC_ID);
-  printf("Succesfully synced and sync id sent back\n");
+  printf("Succesfully synced and sync id sent back, waiting 2000ms as per datasheet\n");
+
+  vTaskDelay(2000 / portTICK_PERIOD_MS);
   return true;
 }
 
@@ -351,7 +362,6 @@ void app_main(void) {
   // Install UART driver (we don't need an event queue here)
   // In this example we don't even use a buffer for sending data.
   uart_driver_install(uart_num, BUF_SIZE * 2, 0, 0, NULL, 0);
-  uint8_t* data = (uint8_t*)malloc(BUF_SIZE);
 
   printf("aaand a one\n");
   vTaskDelay(2000 / portTICK_PERIOD_MS);
@@ -369,12 +379,25 @@ void app_main(void) {
     }
   }
 
+  printf("sending RESET\n");
+  sendCommand(RESET_ID, 0x00, 0x00, 0x00, 0x00, 100);
+  vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+  if (syncCamera()) {
+    printf("camera synced\n");
+  } else {
+    while (1) {
+      printf("camera failed to sync\n");
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
+  }
+
   printf("sending init\n");
-  sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, INIT_P3_RAW_80X60, INIT_P4_JPEG_640X480, 100);
+  sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_640X480, 100);
   vTaskDelay(100 / portTICK_PERIOD_MS);
 
-  printf("sending package size 512 bytes\n");
-  sendCommand(SET_PKG_SIZE_ID, SET_PKG_SIZE_P1, 0x00, 0x00, 0x02, 100);
+  printf("sending package size 256 bytes\n");
+  sendCommand(SET_PKG_SIZE_ID, SET_PKG_SIZE_P1, 0x00, 0x02, 0x09, 100);
   vTaskDelay(100 / portTICK_PERIOD_MS);
 
   printf("sending snapshot mode\n");
@@ -382,11 +405,11 @@ void app_main(void) {
   vTaskDelay(100 / portTICK_PERIOD_MS);
 
   printf("sending get picture\n");
-  sendCommand(GET_PICTURE_ID, SNAPSHOT_P1_JPEG, 0x00, 0x00, 0x00, 100);
+  sendCommand(GET_PICTURE_ID, GET_PICTURE_P1_SNAPSHOT_MODE, 0x00, 0x00, 0x00, 100);
   vTaskDelay(100 / portTICK_PERIOD_MS);
 
   /* if (receiveData(100)) { */
-  receiveData(100);
+  receiveData(500);
   printf("got DATA, sending ACK\n");
   sendAck(DATA_ID);
   /* } */
