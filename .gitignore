@@ -53,3 +53,5 @@ dkms.conf
 
 *.jpg
 build/
+.cache/
+__pycache__/
