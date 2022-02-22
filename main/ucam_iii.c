@@ -1,11 +1,4 @@
-/* Hello World Example
 
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
 #include <stdio.h>
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
@@ -93,9 +86,6 @@ void print_buffer_as_hex(uint8_t* address, int length) {
 #endif
   for (int i = 0; i < length; i++) {
     printf("%02X", *(address + i));
-    if (i % 512 == 0) {
-      vTaskDelay(10 / portTICK_PERIOD_MS);
-    }
   }
 }
 
@@ -191,34 +181,6 @@ void sendPacketAck(uint8_t id_byte_0, uint8_t id_byte_1) {
 
 //}
 
-/* receiveImagePacket() //{ */
-
-uint16_t receiveImagePacket(int ack_timeout_ms, uint8_t* img_buffer, uint16_t offset) {
-
-  uint16_t image_data_size = 0;
-
-  uint8_t receive_buf[512];
-  int     len = uart_read_bytes(UART_NUM_1, receive_buf, 512, ack_timeout_ms / portTICK_RATE_MS);
-
-  if (len > 4) {
-    image_data_size = (receive_buf[3] << 8) + receive_buf[2];
-    /* printf("got %i bytes, data size: %i ID: ", len, image_data_size); */
-    /* print_buffer_as_hex(receive_buf, len); */
-    /* printf("\n"); */
-    for (int i = 4; i < len - 2; i++) {
-      img_buffer[i + offset - 4] = receive_buf[i];
-    }
-    sendPacketAck(receive_buf[1], receive_buf[0]);
-  } else if (len != 0) {
-    /* printf("got %i bytes, ID: \n", len); */
-    /* print_buffer_as_hex(receive_buf, len); */
-  }
-
-  return image_data_size;
-}
-
-//}
-
 /* sendCommand() //{ */
 
 bool sendCommand(uint8_t command_id, uint8_t param1, uint8_t param2, uint8_t param3, uint8_t param4, int ack_timeout_ms) {
@@ -303,9 +265,11 @@ bool syncCamera() {
     return false;
   }
 
-  printf("Succesfully synced\n");
   sendAck(SYNC_ID);
+
+#ifdef DEBUG_OUTPUT
   printf("Succesfully synced and sync id sent back, waiting 2000ms as per datasheet\n");
+#endif
 
   vTaskDelay(2000 / portTICK_PERIOD_MS);
   return true;
@@ -395,7 +359,6 @@ bool receive_jpeg_image(uint32_t image_size, uint16_t packet_size, uint8_t* dest
 
 //}
 
-
 /* app_main() //{ */
 
 void app_main(void) {
@@ -414,7 +377,7 @@ void app_main(void) {
   uart_set_pin(uart_num, ECHO_TEST_TXD, ECHO_TEST_RXD, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
   uart_driver_install(uart_num, BUF_SIZE * 2, 0, 0, NULL, 0);
 
-  uint8_t* datakeeper = (uint8_t*)malloc(38400 * sizeof(uint8_t));
+  uint8_t* datakeeper = (uint8_t*)malloc(38400 * sizeof(uint8_t)); // simulation of image storage
 
   printf("running in ... 3\n");
   vTaskDelay(2000 / portTICK_PERIOD_MS);
@@ -433,7 +396,8 @@ void app_main(void) {
   }
 
   printf("sending init\n");
-  sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_640X480, 100);
+  sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_320X240, 100);
+  /* sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_640X480, 100); */
   vTaskDelay(100 / portTICK_PERIOD_MS);
 
   printf("sending package size 512 bytes\n");
@@ -458,7 +422,7 @@ void app_main(void) {
 
   while (1) {
     vTaskDelay(1000 / portTICK_PERIOD_MS);
-    printf("we are done here");
+    printf("done");
   }
 }
 
