@@ -19,7 +19,7 @@
 
 #define ECHO_TEST_TXD (17)
 #define ECHO_TEST_RXD (16)
-#define BUF_SIZE (4096)
+#define BUF_SIZE (1024)
 
 #ifdef CONFIG_IDF_TARGET_ESP32
 #define CHIP_NAME "ESP32"
@@ -232,8 +232,9 @@ uint16_t receiveImagePacket(int ack_timeout_ms, uint8_t* img_buffer, uint16_t of
     image_data_size = (receive_buf[3] << 8) + receive_buf[2];
     /* printf("got %i bytes, data size: %i ID: ", len, image_data_size); */
     /* print_buffer_as_hex(receive_buf, len); */
+    /* printf("\n"); */
     for (int i = 4; i < len - 2; i++) {
-      img_buffer[i + offset] = receive_buf[i];
+      img_buffer[i + offset - 4] = receive_buf[i];
     }
     sendPacketAck(receive_buf[1], receive_buf[0]);
   } else if (len != 0) {
@@ -417,15 +418,17 @@ void app_main(void) {
 
   while (1) {
     uint16_t got_bytes = receiveImagePacket(100, image_buffer, got_total_bytes);
+
+
     if (got_bytes > 0) {
       got_total_bytes += got_bytes;
       if (data_to_be_rec == got_total_bytes) {
         print_buffer_as_hex(image_buffer, got_total_bytes);
-          /* printf("Got all the stuff\n"); */
-        }
+        /* printf("Got all the stuff\n"); */
       }
     }
   }
+}
 
-  //}
+//}
 
