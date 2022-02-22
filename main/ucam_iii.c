@@ -93,8 +93,8 @@ void print_buffer_as_hex(uint8_t* address, int length) {
 #endif
   for (int i = 0; i < length; i++) {
     printf("%02X", *(address + i));
-    if (i % 64 == 0 && i != 0) {
-      /* printf("\n"); */
+    if (i % 512 == 0) {
+      vTaskDelay(10 / portTICK_PERIOD_MS);
     }
   }
 }
@@ -163,34 +163,6 @@ bool receiveSync(int ack_timeout_ms) {
   printf("\n---------------------------------\n");
 #endif
 
-  return ret_val;
-}
-
-//}
-
-/* receiveData() //{ */
-
-uint16_t receiveData(int ack_timeout_ms) {
-
-  uint16_t ret_val = 0;
-
-  uint8_t receive_buf[6];
-  int     len = uart_read_bytes(UART_NUM_1, receive_buf, 6, ack_timeout_ms / portTICK_RATE_MS);
-
-  if (receive_buf[0] == COMMAND_START && receive_buf[1] == DATA_ID && len == 6) {
-    ret_val = true;
-
-    ret_val = (receive_buf[5] << 16) + (receive_buf[4] << 8) + receive_buf[3];
-
-    printf("DATA_SIZE: %i  %X %X %X\n", ret_val, receive_buf[3], receive_buf[4], receive_buf[5]);
-#ifdef DEBUG_OUTPUT
-    printf("REC %i: \n", len);
-    print_buffer_as_hex(receive_buf, len);
-    printf("DATA: ");
-    printf(ret_val ? "true" : "false");
-    printf("\n---------------------------------\n");
-#endif
-  }
   return ret_val;
 }
 
@@ -341,6 +313,89 @@ bool syncCamera() {
 
 //}
 
+/* request_image() //{ */
+
+uint32_t request_image(uint8_t image_type) {
+
+  uint32_t ret_val = 0;
+
+  sendCommand(GET_PICTURE_ID, GET_PICTURE_P1_SNAPSHOT_MODE, 0x00, 0x00, 0x00, 100);
+  vTaskDelay(100 / portTICK_PERIOD_MS);
+
+  // receive the DATA command
+
+  uint8_t receive_buf[6];
+  int     len = uart_read_bytes(UART_NUM_1, receive_buf, 6, 100 / portTICK_RATE_MS);
+
+  if (receive_buf[0] == COMMAND_START && receive_buf[1] == DATA_ID && len == 6) {
+
+    ret_val = (receive_buf[5] << 16) + (receive_buf[4] << 8) + receive_buf[3];
+
+#ifdef DEBUG_OUTPUT
+    printf("Incoming data size: %i \n", ret_val);
+    printf("REC %i: \n", len);
+    print_buffer_as_hex(receive_buf, len);
+    printf("\ngot DATA, sending ACK\n");
+    sendAck(DATA_ID);
+    printf("\n---------------------------------\n");
+#endif
+  }
+
+  return ret_val;
+}
+
+//}
+
+/* receive_jpeg_image() //{ */
+
+bool receive_jpeg_image(uint32_t image_size, uint16_t packet_size, uint8_t* dest_buffer) {
+
+  bool     ret_val       = false;
+  uint32_t bytes_written = 0;  // number of bytes written to the dest_buffer
+  uint8_t  receive_buffer[packet_size];
+  /* uint16_t expected_packet_id = 1; */  //  TODO: check the id of the incoming packets, also check the verification code
+
+  while (1) {
+
+    uint32_t got_bytes = uart_read_bytes(UART_NUM_1, receive_buffer, packet_size, 100 / portTICK_RATE_MS);
+
+    if (got_bytes > 4) {
+      uint16_t packet_data_size = (receive_buffer[3] << 8) + receive_buffer[2];
+
+      if (bytes_written + packet_data_size > image_size) {
+        printf("Received too much data, aborting!\n");
+        ret_val = false;
+        break;
+      }
+
+      for (int i = 0; i < packet_data_size; i++) {
+        dest_buffer[bytes_written + i] = receive_buffer[i+4]; //first 4 bytes are not containing image data
+      }
+      bytes_written += packet_data_size;
+
+      printf("Received %i/%i bytes\n", bytes_written, image_size);
+
+      sendPacketAck(receive_buffer[1], receive_buffer[0]);
+    }else{
+        printf("Received invalid data, aborting!\n");
+        ret_val = false;
+        break;
+    }
+
+    if (bytes_written == image_size) {
+      printf("Image data received succesfully\n");
+      ret_val = true;
+      break;
+    }
+    // TODO: add a timeout condition if no packets are arriving
+  }
+
+  return ret_val;
+}
+
+//}
+
+
 /* app_main() //{ */
 
 void app_main(void) {
@@ -355,20 +410,17 @@ void app_main(void) {
       .rx_flow_ctrl_thresh = 122,
   };
 
-  // Configure UART1 parameters
   uart_param_config(uart_num, &uart_config);
-  // Set UART1 pins(TX: IO4, RX: I05)
   uart_set_pin(uart_num, ECHO_TEST_TXD, ECHO_TEST_RXD, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-
-  // Install UART driver (we don't need an event queue here)
-  // In this example we don't even use a buffer for sending data.
   uart_driver_install(uart_num, BUF_SIZE * 2, 0, 0, NULL, 0);
 
-  printf("aaand a one\n");
+  uint8_t* datakeeper = (uint8_t*)malloc(38400 * sizeof(uint8_t));
+
+  printf("running in ... 3\n");
   vTaskDelay(2000 / portTICK_PERIOD_MS);
-  printf("aaand a two\n");
+  printf("running in ... 2\n");
   vTaskDelay(2000 / portTICK_PERIOD_MS);
-  printf("aaand a three\n");
+  printf("running in ... 1\n");
   vTaskDelay(2000 / portTICK_PERIOD_MS);
 
   if (syncCamera()) {
@@ -380,53 +432,33 @@ void app_main(void) {
     }
   }
 
-  /* printf("sending RESET\n"); */
-  /* sendCommand(RESET_ID, 0x00, 0x00, 0x00, 0x00, 100); */
-  /* vTaskDelay(1000 / portTICK_PERIOD_MS); */
-
-  /* if (syncCamera()) { */
-  /*   printf("camera synced\n"); */
-  /* } else { */
-  /*   while (1) { */
-  /*     printf("camera failed to sync\n"); */
-  /*     vTaskDelay(1000 / portTICK_PERIOD_MS); */
-  /*   } */
-  /* } */
-
   printf("sending init\n");
   sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_640X480, 100);
   vTaskDelay(100 / portTICK_PERIOD_MS);
 
-  printf("sending package size 256 bytes\n");
+  printf("sending package size 512 bytes\n");
   sendCommand(SET_PKG_SIZE_ID, SET_PKG_SIZE_P1, 0x00, 0x02, 0x09, 100);
   vTaskDelay(100 / portTICK_PERIOD_MS);
 
-  printf("sending snapshot mode\n");
+  printf("sending snapshot mode, jpeg\n");
   sendCommand(SNAPSHOT_ID, SNAPSHOT_P1_JPEG, 0x00, 0x00, 0x00, 100);
   vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-  printf("sending get picture\n");
-  sendCommand(GET_PICTURE_ID, GET_PICTURE_P1_SNAPSHOT_MODE, 0x00, 0x00, 0x00, 100);
-  vTaskDelay(100 / portTICK_PERIOD_MS);
+  printf("requesting image\n");
+  uint32_t image_size = request_image(GET_PICTURE_P1_SNAPSHOT_MODE);
 
-  uint16_t data_to_be_rec = receiveData(100);
-  printf("got DATA, sending ACK\n");
-  sendAck(DATA_ID);
+  bool got_image = receive_jpeg_image(image_size, 512, datakeeper);  // packet size hardcoded for now
 
-  uint32_t got_total_bytes = 0;
-  uint8_t* image_buffer    = (uint8_t*)malloc(40000 * sizeof(uint8_t));
+  vTaskDelay(2000 / portTICK_PERIOD_MS);
+  if (got_image) {
+    printf("sssss"); //synchronization message for the python image receiver
+    print_buffer_as_hex(datakeeper, image_size);
+    printf("sssss"); //synchronization message for the python image receiver
+  }
 
   while (1) {
-    uint16_t got_bytes = receiveImagePacket(100, image_buffer, got_total_bytes);
-
-
-    if (got_bytes > 0) {
-      got_total_bytes += got_bytes;
-      if (data_to_be_rec == got_total_bytes) {
-        print_buffer_as_hex(image_buffer, got_total_bytes);
-        /* printf("Got all the stuff\n"); */
-      }
-    }
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    printf("we are done here");
   }
 }
 
