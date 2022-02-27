@@ -222,7 +222,7 @@ uint32_t request_image(uint8_t image_type) {
 
   uint32_t ret_val = 0;
 
-  sendCommand(GET_PICTURE_ID, GET_PICTURE_P1_SNAPSHOT_MODE, 0x00, 0x00, 0x00, 100);
+  sendCommand(GET_PICTURE_ID, image_type, 0x00, 0x00, 0x00, 100);
 
   // receive the DATA command
 
@@ -302,6 +302,7 @@ bool receive_raw_image(uint16_t rec_buffer_size, uint8_t* dest_buffer) {
   uint32_t image_size = request_image(GET_PICTURE_P1_SNAPSHOT_MODE);
 
   uint32_t read_data_bytes = 0;
+  uint32_t dest_buffer_it  = 0;
   uint32_t iter_num        = 0;
 
 
@@ -312,19 +313,23 @@ bool receive_raw_image(uint16_t rec_buffer_size, uint8_t* dest_buffer) {
     while (read_bytes_this_iter < read_data_bytes) {
       read_bytes_this_iter += uart_read_bytes(UART_NUM_1, dummy_buffer, 1, 1 / portTICK_RATE_MS);
     }
-    printf("ri: %i\n", read_bytes_this_iter);
 
-    uint32_t tmp_read_bytes = uart_read_bytes(UART_NUM_1, receive_buffer, rec_buffer_size, 100 / portTICK_RATE_MS);
-    read_data_bytes += tmp_read_bytes;
-    read_bytes_this_iter += tmp_read_bytes;
+    uint32_t read_data_bytes_this_iter = uart_read_bytes(UART_NUM_1, receive_buffer, rec_buffer_size, 100 / portTICK_RATE_MS);
+    read_data_bytes += read_data_bytes_this_iter;
+    read_bytes_this_iter += read_data_bytes_this_iter;
 
-    printf("ri: %i\n", read_bytes_this_iter);
     while (read_bytes_this_iter < image_size) {
       read_bytes_this_iter += uart_read_bytes(UART_NUM_1, dummy_buffer, 1, 1 / portTICK_RATE_MS);
     }
 
-    printf("ri: %i\n", read_bytes_this_iter);
+    for (int i = 0; i < read_data_bytes_this_iter; i++) {
+      dest_buffer[dest_buffer_it + i] = receive_buffer[i];
+      dest_buffer_it++;
+    }
+
     printf("read bytes: %i/%i\n", read_data_bytes, image_size);
+
+    sendAck(0x00);  // according to the datasheet, this ACK should not be necesary, but the camera freezes without it
 
     if (read_data_bytes == image_size) {
       printf("All data read!\n");
@@ -337,7 +342,7 @@ bool receive_raw_image(uint16_t rec_buffer_size, uint8_t* dest_buffer) {
 
     printf("End of loop number %i\n", iter_num);
     iter_num++;
-    syncCamera();
+
     while (!request_image(GET_PICTURE_P1_SNAPSHOT_MODE)) {
       vTaskDelay(500 / portTICK_PERIOD_MS);
     }

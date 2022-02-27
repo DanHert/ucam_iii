@@ -87,7 +87,7 @@ void app_main(void) {
   /* } */
 
   printf("sending init\n");
-  sendCommand(INIT_ID, 0x00, INIT_P2_RAW_16BIT_COLOUR_RGB, INIT_P3_RAW_160X120, INIT_P4_JPEG_640X480, 100);
+  sendCommand(INIT_ID, 0x00, INIT_P2_RAW_16BIT_COLOUR_CRYCBY, INIT_P3_RAW_80X60, INIT_P4_JPEG_640X480, 100);
   vTaskDelay(100 / portTICK_PERIOD_MS);
 
   printf("sending snapshot mode, jpeg\n");
@@ -96,9 +96,15 @@ void app_main(void) {
 
   bool got_image = receive_raw_image(512, datakeeper);  // packet size hardcoded for now
 
-  int     len = uart_read_bytes(UART_NUM_1, datakeeper, 40000, 1000 / portTICK_RATE_MS);
+  /* int     len = uart_read_bytes(UART_NUM_1, datakeeper, 40000, 1000 / portTICK_RATE_MS); */
+  if (got_image) {
+    printf("sssss"); //synchronization message for the python image receiver
+    print_buffer_as_hex(datakeeper, 9600);
+    printf("sssss"); //synchronization message for the python image receiver
+    fflush(stdout);
+  }
 
-  printf("got_bytes: %i \n", len);
+
 
   while (1) {
     vTaskDelay(1000 / portTICK_PERIOD_MS);
