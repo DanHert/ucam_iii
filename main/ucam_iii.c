@@ -270,7 +270,7 @@ bool receive_jpeg_image(uint32_t image_size, uint16_t packet_size, uint8_t* dest
 
       sendPacketAck(receive_buffer[1], receive_buffer[0]);
     } else {
-      printf("Received invalid data, aborting!\n");
+      printf("Received invalid data %i, aborting!\n", got_bytes);
       ret_val = false;
       break;
     }
