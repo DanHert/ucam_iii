@@ -1,3 +1,6 @@
 [submodule "main/main/ucam-iii"]
 	path = main/main/ucam-iii
 	url = git@code.vzlusat.cz:planetum1/earth-cam/ucam-iii.git
+[submodule "main/ucam-iii"]
+	path = main/ucam-iii
+	url = git@code.vzlusat.cz:planetum1/earth-cam/ucam-iii.git

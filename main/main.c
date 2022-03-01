@@ -4,7 +4,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
-#include "nvs_flash.h"
+/* #include "nvs_flash.h" */
 #include "driver/uart.h"
 #include "freertos/queue.h"
 #include "esp_log.h"
@@ -61,57 +61,57 @@ void app_main(void) {
     }
   }
 
- printf("sending init\n");
-  /* sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_320X240, 100); */
-  /* sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_640X480, 100); */
-  sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_160X128, 100);
+ /* printf("sending init\n"); */
+ /*  /1* sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_320X240, 100); *1/ */
+ /*  /1* sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_640X480, 100); *1/ */
+ /*  sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_160X128, 100); */
+ /*  vTaskDelay(100 / portTICK_PERIOD_MS); */
+
+ /*  printf("sending package size 512 bytes\n"); */
+ /*  sendCommand(SET_PKG_SIZE_ID, SET_PKG_SIZE_P1, 0x00, 0x02, 0x09, 100); */
+ /*  vTaskDelay(100 / portTICK_PERIOD_MS); */
+
+ /*  printf("sending snapshot mode, jpeg\n"); */
+ /*  sendCommand(SNAPSHOT_ID, SNAPSHOT_P1_JPEG, 0x00, 0x00, 0x00, 100); */
+ /*  vTaskDelay(1000 / portTICK_PERIOD_MS); */
+
+ /*  printf("requesting image\n"); */
+ /*  uint32_t image_size = request_image(GET_PICTURE_P1_SNAPSHOT_MODE); */
+
+ /*  printf("requesting image compl %i\n" , image_size); */
+ /*  bool got_image = receive_jpeg_image(image_size, 512, datakeeper);  // packet size hardcoded for now */
+
+ /*  vTaskDelay(2000 / portTICK_PERIOD_MS); */
+ /*  if (got_image) { */
+ /*    printf("sssss"); //synchronization message for the python image receiver */
+ /*    print_buffer_as_hex(datakeeper, image_size); */
+ /*    printf("sssss"); //synchronization message for the python image receiver */
+ /*    fflush(stdout); */
+ /*  } */
+
+
+  printf("sending init\n");
+  sendCommand(INIT_ID, 0x00, INIT_P2_RAW_8BIT_GRAYSCALE, INIT_P3_RAW_160X120, INIT_P4_JPEG_640X480, 100);
   vTaskDelay(100 / portTICK_PERIOD_MS);
 
-  printf("sending package size 512 bytes\n");
-  sendCommand(SET_PKG_SIZE_ID, SET_PKG_SIZE_P1, 0x00, 0x02, 0x09, 100);
-  vTaskDelay(100 / portTICK_PERIOD_MS);
-
-  printf("sending snapshot mode, jpeg\n");
-  sendCommand(SNAPSHOT_ID, SNAPSHOT_P1_JPEG, 0x00, 0x00, 0x00, 100);
+  printf("sending snapshot mode, raw\n");
+  sendCommand(SNAPSHOT_ID, SNAPSHOT_P1_RAW, 0x00, 0x00, 0x00, 100);
   vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-  printf("requesting image\n");
-  uint32_t image_size = request_image(GET_PICTURE_P1_SNAPSHOT_MODE);
+  bool got_image = receive_raw_image(1024, datakeeper);  // packet size hardcoded for now
 
-  printf("requesting image compl %i\n" , image_size);
-  bool got_image = receive_jpeg_image(image_size, 512, datakeeper);  // packet size hardcoded for now
-
-  vTaskDelay(2000 / portTICK_PERIOD_MS);
+  int     len = uart_read_bytes(UART_NUM_1, datakeeper, 40000, 1000 / portTICK_RATE_MS);
   if (got_image) {
     printf("sssss"); //synchronization message for the python image receiver
-    print_buffer_as_hex(datakeeper, image_size);
+    print_buffer_as_hex(datakeeper, 19200);
     printf("sssss"); //synchronization message for the python image receiver
     fflush(stdout);
   }
 
-
-  /* printf("sending init\n"); */
-  /* sendCommand(INIT_ID, 0x00, INIT_P2_RAW_8BIT_GRAYSCALE, INIT_P3_RAW_160X120, INIT_P4_JPEG_640X480, 100); */
-  /* vTaskDelay(100 / portTICK_PERIOD_MS); */
-
-  /* printf("sending snapshot mode, raw\n"); */
-  /* sendCommand(SNAPSHOT_ID, SNAPSHOT_P1_RAW, 0x00, 0x00, 0x00, 100); */
-  /* vTaskDelay(1000 / portTICK_PERIOD_MS); */
-
-  /* bool got_image = receive_raw_image(1024, datakeeper);  // packet size hardcoded for now */
-
-  /* int     len = uart_read_bytes(UART_NUM_1, datakeeper, 40000, 1000 / portTICK_RATE_MS); */
-  /* if (got_image) { */
-  /*   printf("sssss"); //synchronization message for the python image receiver */
-  /*   print_buffer_as_hex(datakeeper, 19200); */
-  /*   printf("sssss"); //synchronization message for the python image receiver */
-  /*   fflush(stdout); */
-  /* } */
-
-  /* while (1) { */
-  /*   vTaskDelay(1000 / portTICK_PERIOD_MS); */
-  /*   printf("done"); */
-  /* } */
+  while (1) {
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    printf("done");
+  }
 }
 
 //}
