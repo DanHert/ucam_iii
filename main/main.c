@@ -63,7 +63,8 @@ void app_main(void) {
 
  printf("sending init\n");
   /* sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_320X240, 100); */
-  sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_640X480, 100);
+  /* sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_640X480, 100); */
+  sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_160X128, 100);
   vTaskDelay(100 / portTICK_PERIOD_MS);
 
   printf("sending package size 512 bytes\n");
@@ -85,33 +86,32 @@ void app_main(void) {
     printf("sssss"); //synchronization message for the python image receiver
     print_buffer_as_hex(datakeeper, image_size);
     printf("sssss"); //synchronization message for the python image receiver
+    fflush(stdout);
   }
 
 
   /* printf("sending init\n"); */
-  /* sendCommand(INIT_ID, 0x00, INIT_P2_RAW_8BIT_GRAYSCALE, INIT_P3_RAW_128X128, INIT_P4_JPEG_640X480, 100); */
+  /* sendCommand(INIT_ID, 0x00, INIT_P2_RAW_8BIT_GRAYSCALE, INIT_P3_RAW_160X120, INIT_P4_JPEG_640X480, 100); */
   /* vTaskDelay(100 / portTICK_PERIOD_MS); */
 
-  /* printf("sending snapshot mode, jpeg\n"); */
+  /* printf("sending snapshot mode, raw\n"); */
   /* sendCommand(SNAPSHOT_ID, SNAPSHOT_P1_RAW, 0x00, 0x00, 0x00, 100); */
   /* vTaskDelay(1000 / portTICK_PERIOD_MS); */
 
-  /* bool got_image = receive_raw_image(512, datakeeper);  // packet size hardcoded for now */
+  /* bool got_image = receive_raw_image(1024, datakeeper);  // packet size hardcoded for now */
 
   /* int     len = uart_read_bytes(UART_NUM_1, datakeeper, 40000, 1000 / portTICK_RATE_MS); */
   /* if (got_image) { */
   /*   printf("sssss"); //synchronization message for the python image receiver */
-  /*   print_buffer_as_hex(datakeeper, 16384); */
+  /*   print_buffer_as_hex(datakeeper, 19200); */
   /*   printf("sssss"); //synchronization message for the python image receiver */
   /*   fflush(stdout); */
   /* } */
 
-
-
-  while (1) {
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    printf("done");
-  }
+  /* while (1) { */
+  /*   vTaskDelay(1000 / portTICK_PERIOD_MS); */
+  /*   printf("done"); */
+  /* } */
 }
 
 //}
