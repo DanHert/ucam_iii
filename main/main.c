@@ -30,8 +30,8 @@ void app_main(void) {
 
   const int     uart_num    = UART_NUM_1;
   uart_config_t uart_config = {
-      /* .baud_rate           = 921600, */
-      .baud_rate           = 115200,
+      .baud_rate           = 921600,
+      /* .baud_rate           = 115200, */
       .data_bits           = UART_DATA_8_BITS,
       .parity              = UART_PARITY_DISABLE,
       .stop_bits           = UART_STOP_BITS_1,
@@ -62,8 +62,8 @@ void app_main(void) {
   }
 
  printf("sending init\n");
-  sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_320X240, 100);
-  /* sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_640X480, 100); */
+  /* sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_320X240, 100); */
+  sendCommand(INIT_ID, 0x00, INIT_P2_JPEG, 0x07, INIT_P4_JPEG_640X480, 100);
   vTaskDelay(100 / portTICK_PERIOD_MS);
 
   printf("sending package size 512 bytes\n");
